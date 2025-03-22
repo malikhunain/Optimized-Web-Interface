@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Comparison Display</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto;
+        }
+        .comparison-container {
+            display: flex;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        .image-display {
+            text-align: center;
+            margin: 0 1rem;
+            width: 45%;
+        }
+        .image-display img {
+            max-width: 100%;
+            max-height: 400px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        .progress-container {
+            margin-top: 1rem;
+        }
+        .image-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .status-message {
+            text-align: center;
+            margin: 1rem 0;
+            font-style: italic;
+            color: #666;
+        }
+        .image-info {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Image Comparison Display</h1>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary me-2">Start Slideshow</button>
+            <button id="pauseBtn" class="btn btn-secondary me-2" disabled>Pause</button>
+            <button id="prevBtn" class="btn btn-outline-primary me-2">Previous</button>
+            <button id="nextBtn" class="btn btn-outline-primary">Next</button>
+        </div>
+        
+        <div class="status-message" id="statusMessage">
+            Ready to display {{ context.total_images }} images with modifiers: {{ context.selected_modifiers }}
+        </div>
+        
+        <div class="comparison-container">
+            <div class="image-display">
+                <div class="image-title">Original Image</div>
+                <img id="originalImage" src="" alt="Original Image">
+                <div class="image-info" id="imageFilename"></div>
+            </div>
+            <div class="image-display">
+                <div class="image-title">Modified Image</div>
+                <img id="modifiedImage" src="" alt="Modified Image">
+            </div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="text-center mt-2">
+                <span id="currentIndex">0</span> / <span id="totalImages">{{ context.total_images }}</span>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to Main Interface</a>
+        </div>
+    </div>
+    
+    <script>
+        // Display elements
+        const originalImageEl = document.getElementById('originalImage');
+        const modifiedImageEl = document.getElementById('modifiedImage');
+        const progressBar = document.getElementById('progressBar');
+        const currentIndexEl = document.getElementById('currentIndex');
+        const totalImagesEl = document.getElementById('totalImages');
+        const statusMessageEl = document.getElementById('statusMessage');
+        const imageFilenameEl = document.getElementById('imageFilename');
+        
+        // Control buttons
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        
+        // Variables
+        let currentIndex = -1;
+        let slideshowInterval = null;
+        const slideshowDelay = 1000; // 1 second
+        let isLoading = false;
+        let totalImages = parseInt('{{ context.total_images }}', 10);
+        
+        // Cache for processed images
+        const processedImages = {};
+        
+        // Load and show image at specific index
+        async function loadAndShowImage(index) {
+            if (index < 0 || index >= totalImages || isLoading) {
+                return;
+            }
+            
+            isLoading = true;
+            statusMessageEl.textContent = `Loading image ${index + 1} of ${totalImages}...`;
+            
+            try {
+                // Check if we already have this image processed and cached
+                if (processedImages[index]) {
+                    showImageFromCache(index);
+                    return;
+                }
+                
+                // Process the image on-demand
+                const response = await fetch(`/process_image/${index}`);
+                if (!response.ok) {
+                    throw new Error('Failed to process image');
+                }
+                
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Cache the processed image data
+                processedImages[index] = data;
+                
+                // Display the image
+                showImageFromCache(index);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusMessageEl.textContent = `Error: ${error.message}`;
+                isLoading = false;
+            }
+        }
+        
+        // Show image from cache
+        function showImageFromCache(index) {
+            const data = processedImages[index];
+            if (!data) return;
+            
+            currentIndex = index;
+            originalImageEl.src = data.original;
+            modifiedImageEl.src = data.modified;
+            currentIndexEl.textContent = index + 1;
+            imageFilenameEl.textContent = data.filename;
+            
+            // Update progress bar
+            const percentage = ((index + 1) / totalImages) * 100;
+            progressBar.style.width = percentage + '%';
+            
+            statusMessageEl.textContent = `Showing image ${index + 1} of ${totalImages}`;
+            isLoading = false;
+        }
+        
+        // Preload next image
+        function preloadNextImage() {
+            const nextIndex = currentIndex + 1;
+            if (nextIndex < totalImages && !processedImages[nextIndex]) {
+                // Create a background fetch that doesn't wait for completion
+                fetch(`/process_image/${nextIndex}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.error) {
+                            processedImages[nextIndex] = data;
+                        }
+                    })
+                    .catch(error => console.error('Preload error:', error));
+            }
+        }
+        
+        // Start slideshow
+        function startSlideshow() {
+            if (isLoading) return;
+            
+            startBtn.disabled = true;
+            pauseBtn.disabled = false;
+            
+            // If at the end, restart from beginning
+            if (currentIndex >= totalImages - 1) {
+                currentIndex = -1;
+            }
+            
+            // Show the next image immediately
+            loadAndShowImage(currentIndex + 1).then(() => {
+                // Preload the next image for smoother transitions
+                preloadNextImage();
+            });
+            
+            slideshowInterval = setInterval(() => {
+                if (isLoading) return;
+                
+                if (currentIndex < totalImages - 1) {
+                    loadAndShowImage(currentIndex + 1).then(() => {
+                        preloadNextImage();
+                    });
+                } else {
+                    // Stop at the end
+                    pauseSlideshow();
+                }
+            }, slideshowDelay);
+        }
+        
+        // Pause slideshow
+        function pauseSlideshow() {
+            clearInterval(slideshowInterval);
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+        }
+        
+        // Navigate to previous image
+        function showPrevImage() {
+            pauseSlideshow();
+            loadAndShowImage(currentIndex - 1);
+        }
+        
+        // Navigate to next image
+        function showNextImage() {
+            pauseSlideshow();
+            loadAndShowImage(currentIndex + 1);
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startSlideshow);
+        pauseBtn.addEventListener('click', pauseSlideshow);
+        prevBtn.addEventListener('click', showPrevImage);
+        nextBtn.addEventListener('click', showNextImage);
+        
+        // Initialize - load the first image when page loads and start slideshow
+        window.addEventListener('load', () => {
+            loadAndShowImage(0).then(() => {
+                preloadNextImage();
+                // Auto-start slideshow after a short delay to ensure first image is loaded
+                setTimeout(() => {
+                    startSlideshow();
+                }, 500);
+            });
+        });
+    </script>
+</body>
+</html>

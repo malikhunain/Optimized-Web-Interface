@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Comparison Display</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto;
+        }
+        .comparison-container {
+            display: flex;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        .image-display {
+            text-align: center;
+            margin: 0 1rem;
+            width: 45%;
+        }
+        .image-display img {
+            max-width: 100%;
+            max-height: 400px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        .progress-container {
+            margin-top: 1rem;
+        }
+        .image-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Image Comparison Display</h1>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary me-2">Start Slideshow</button>
+            <button id="pauseBtn" class="btn btn-secondary me-2" disabled>Pause</button>
+            <button id="prevBtn" class="btn btn-outline-primary me-2">Previous</button>
+            <button id="nextBtn" class="btn btn-outline-primary">Next</button>
+        </div>
+        
+        <div class="comparison-container">
+            <div class="image-display">
+                <div class="image-title">Original Image</div>
+                <img id="originalImage" src="" alt="Original Image">
+            </div>
+            <div class="image-display">
+                <div class="image-title">Modified Image</div>
+                <img id="modifiedImage" src="" alt="Modified Image">
+            </div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="text-center mt-2">
+                <span id="currentIndex">0</span> / <span id="totalImages">0</span>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to Main Interface</a>
+        </div>
+    </div>
+    
+    <script>
+        // Get image data from Flask
+        const imageData = JSON.parse('{{ image_data|safe }}');
+        const originalImages = imageData.original;
+        const modifiedImages = imageData.modified;
+        
+        // Display elements
+        const originalImageEl = document.getElementById('originalImage');
+        const modifiedImageEl = document.getElementById('modifiedImage');
+        const progressBar = document.getElementById('progressBar');
+        const currentIndexEl = document.getElementById('currentIndex');
+        const totalImagesEl = document.getElementById('totalImages');
+        
+        // Control buttons
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        
+        // Variables
+        let currentIndex = 0;
+        let slideshowInterval = null;
+        const slideshowDelay = 10000; // 1 second
+        
+        // Initialize display
+        function init() {
+            totalImagesEl.textContent = originalImages.length;
+            showImage(0);
+            updateProgressBar();
+        }
+        
+        // Show image at specific index
+        function showImage(index) {
+            if (index >= 0 && index < originalImages.length) {
+                currentIndex = index;
+                originalImageEl.src = originalImages[index];
+                modifiedImageEl.src = modifiedImages[index];
+                currentIndexEl.textContent = index + 1;
+                updateProgressBar();
+            }
+        }
+        
+        // Update progress bar
+        function updateProgressBar() {
+            const percentage = ((currentIndex + 1) / originalImages.length) * 100;
+            progressBar.style.width = percentage + '%';
+        }
+        
+        // Start slideshow
+        function startSlideshow() {
+            startBtn.disabled = true;
+            pauseBtn.disabled = false;
+            
+            slideshowInterval = setInterval(() => {
+                if (currentIndex < originalImages.length - 1) {
+                    showImage(currentIndex + 1);
+                } else {
+                    // Stop at the end
+                    pauseSlideshow();
+                }
+            }, slideshowDelay);
+        }
+        
+        // Pause slideshow
+        function pauseSlideshow() {
+            clearInterval(slideshowInterval);
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startSlideshow);
+        pauseBtn.addEventListener('click', pauseSlideshow);
+        prevBtn.addEventListener('click', () => showImage(currentIndex - 1));
+        nextBtn.addEventListener('click', () => showImage(currentIndex + 1));
+        
+        // Initialize on page load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

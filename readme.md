@@ -16,9 +16,11 @@ This Flask application allows users to upload image datasets, apply various nois
 The application requires the following Python packages:
 
 ```bash
+aniso8601==10.0.0
 blinker==1.9.0
 click==8.1.8
 Flask==2.3.3
+Flask-RESTful==0.3.10
 imageio==2.37.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
@@ -29,8 +31,10 @@ numpy==1.24.3
 opencv-python-headless==4.6.0.66
 packaging==24.2
 pillow==11.1.0
+pytz==2025.1
 scikit-image==0.25.2
 scipy==1.15.2
+six==1.17.0
 tifffile==2025.3.13
 Werkzeug==2.3.7
 ```
@@ -90,6 +94,10 @@ The following modifiers are available:
 - `GET /api/next_image`: Processes and returns the next image in the sequence.
 - `GET /api/images`: Returns information about all available images.
 - `GET /api/stream`: Streams real-time updates of the currently displayed image.
+
+## Test API
+
+Visit `http://127.0.0.1:5000/external_viewer` to test the API stream data.
 
 ## File Structure
 

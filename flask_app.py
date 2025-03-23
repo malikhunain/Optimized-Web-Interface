@@ -6,6 +6,8 @@ from werkzeug.utils import secure_filename
 from modifiers import apply_modifier
 import glob
 import json
+from flask import Response
+import time
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -26,6 +28,26 @@ app.config['MODIFIED_FOLDER'] = MODIFIED_FOLDER
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# New global variable to track current displayed image
+current_display = {
+    'index': -1,
+    'timestamp': 0,
+    'original_path': '',
+    'modified_path': '',
+    'filename': ''
+}
+
+def update_current_display(index, original_path, modified_path, filename):
+    global current_display
+    current_display = {
+        'index': index,
+        'timestamp': time.time(),
+        'original_path': original_path,
+        'modified_path': modified_path,
+        'filename': filename
+    }
+
 
 @app.route('/')
 def index():
@@ -152,6 +174,34 @@ def display_comparison():
     
     return render_template('display_optimized.html', context=context)
 
+# @app.route('/process_image/<int:index>')
+# def process_image(index):
+#     image_files = session.get('image_files', [])
+#     selected_modifiers = session.get('selected_modifiers', [])
+    
+#     if not image_files or index >= len(image_files):
+#         return jsonify({'error': 'Invalid image index or no images available'})
+    
+#     # Get the current image
+#     image_filename = image_files[index]
+#     input_path = os.path.join(app.config['EXTRACT_FOLDER'], image_filename)
+#     output_path = os.path.join(app.config['MODIFIED_FOLDER'], image_filename)
+    
+#     # Process the image only if it hasn't been processed yet
+#     if not os.path.exists(output_path):
+#         success = apply_modifier(input_path, output_path, selected_modifiers)
+#         if not success:
+#             return jsonify({'error': f'Failed to process image {image_filename}'})
+    
+#     # Return paths for display
+#     return jsonify({
+#         'original': f'/static/extracted/{image_filename}',
+#         'modified': f'/static/modified/{image_filename}',
+#         'index': index,
+#         'total': len(image_files),
+#         'filename': image_filename
+#     })
+
 @app.route('/process_image/<int:index>')
 def process_image(index):
     image_files = session.get('image_files', [])
@@ -171,14 +221,105 @@ def process_image(index):
         if not success:
             return jsonify({'error': f'Failed to process image {image_filename}'})
     
+    # Prepare paths for response
+    original_path = f'/static/extracted/{image_filename}'
+    modified_path = f'/static/modified/{image_filename}'
+    
+    # Update the current display information
+    update_current_display(index, original_path, modified_path, image_filename)
+    
     # Return paths for display
     return jsonify({
-        'original': f'/static/extracted/{image_filename}',
-        'modified': f'/static/modified/{image_filename}',
+        'original': original_path,
+        'modified': modified_path,
         'index': index,
         'total': len(image_files),
         'filename': image_filename
     })
+
+@app.route('/api/current_image', methods=['GET'])
+def get_current_image():
+    """Return the currently displayed image pair"""
+    global current_display
+    
+    if current_display['index'] == -1:
+        return jsonify({
+            'status': 'no_image',
+            'message': 'No image is currently being displayed'
+        }), 404
+    
+    return jsonify({
+        'index': current_display['index'],
+        'timestamp': current_display['timestamp'],
+        'original': request.host_url.rstrip('/') + current_display['original_path'],
+        'modified': request.host_url.rstrip('/') + current_display['modified_path'],
+        'filename': current_display['filename']
+    })
+
+@app.route('/api/next_image', methods=['GET'])
+def get_next_image():
+    """Process and return the next image in the sequence"""
+    image_files = session.get('image_files', [])
+    
+    if not image_files:
+        return jsonify({
+            'status': 'no_images',
+            'message': 'No images available'
+        }), 404
+    
+    next_index = current_display['index'] + 1
+    if next_index >= len(image_files) or next_index < 0:
+        next_index = 0  # Loop back to first image
+    
+    # Process the next image
+    response = process_image(next_index)
+    return response
+
+@app.route('/api/images', methods=['GET'])
+def get_all_images():
+    """Return information about all available images"""
+    image_files = session.get('image_files', [])
+    selected_modifiers = session.get('selected_modifiers', [])
+    
+    if not image_files:
+        return jsonify({
+            'status': 'no_images',
+            'message': 'No images available'
+        }), 404
+    
+    return jsonify({
+        'count': len(image_files),
+        'current_index': current_display['index'],
+        'modifiers': selected_modifiers,
+        'image_files': image_files
+    })
+
+@app.route('/api/stream', methods=['GET'])
+def stream():
+    host_url = request.host_url.rstrip('/')  # Capture before entering the generator
+
+    def event_stream():
+        last_index = -2  # Different from initial -1 to trigger first update
+        while True:
+            if current_display['index'] != last_index:
+                last_index = current_display['index']
+                data = {
+                    'index': current_display['index'],
+                    'timestamp': current_display['timestamp'],
+                    'original': host_url + current_display['original_path'],
+                    'modified': host_url + current_display['modified_path'],
+                    'filename': current_display['filename']
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+            time.sleep(0.2)  # Check for updates every 200ms
+    
+    return Response(event_stream(), mimetype="text/event-stream")
+
+
+
+@app.route('/external_viewer')
+def external_viewer():
+    return render_template('external_viewer.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

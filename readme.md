@@ -95,6 +95,10 @@ The following modifiers are available:
 - `GET /api/images`: Returns information about all available images.
 - `GET /api/stream`: Streams real-time updates of the currently displayed image.
 
+## Test API
+
+Visit `http://127.0.0.1:5000/external_viewer` to test the API stream data.
+
 ## File Structure
 
 - `flask_app.py`: Main Flask application file.

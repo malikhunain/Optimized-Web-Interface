@@ -75,16 +75,21 @@ def index():
                           extracted_images=extracted_images,
                           modifiers=modifiers)
 
+@app.route('/clear_session')
+def clear_session():
+    session.clear()
+    return redirect(url_for('index'))
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         flash('No file part')
-        return redirect(request.url)
+        return redirect(url_for('index'))
     
     file = request.files['file']
     if file.filename == '':
         flash('No selected file')
-        return redirect(request.url)
+        return redirect(url_for('index'))
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)

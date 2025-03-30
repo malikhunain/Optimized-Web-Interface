@@ -63,10 +63,12 @@
             <button id="nextBtn" class="btn btn-outline-primary">Next</button>
         </div>
         
-        <div class="status-message" id="statusMessage">
+        <!-- Status Message -->
+        <div class="status-message" id="statusMessage" style="display: none;">
             Ready to display {{ context.total_images }} images with modifiers: {{ context.selected_modifiers }}
         </div>
         
+        <!-- Displaying Images -->
         <div class="comparison-container">
             <div class="image-display">
                 <div class="image-title">Original Image</div>
@@ -79,7 +81,8 @@
             </div>
         </div>
         
-        <div class="progress-container">
+        <!-- Process Bar -->
+        <div class="progress-container" style="display: none;">
             <div class="progress">
                 <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
             </div>
@@ -112,7 +115,7 @@
         // Variables
         let currentIndex = -1;
         let slideshowInterval = null;
-        const slideshowDelay = 1000; // 1 second
+        const slideshowDelay = 2000; // 1 second
         let isLoading = false;
         let totalImages = parseInt('{{ context.total_images }}', 10);
         
@@ -121,7 +124,14 @@
         
         // Load and show image at specific index
         async function loadAndShowImage(index) {
-            if (index < 0 || index >= totalImages || isLoading) {
+            // Implement looping: if the index is out of bounds, loop back
+            if (index < 0) {
+                index = totalImages - 1;  // If going backward past first image, go to last image
+            } else if (index >= totalImages) {
+                index = 0;  // If going forward past last image, go back to first image
+            }
+            
+            if (isLoading) {
                 return;
             }
             
@@ -180,8 +190,10 @@
         
         // Preload next image
         function preloadNextImage() {
-            const nextIndex = currentIndex + 1;
-            if (nextIndex < totalImages && !processedImages[nextIndex]) {
+            // Calculate next index with looping
+            const nextIndex = (currentIndex + 1) % totalImages;
+            
+            if (!processedImages[nextIndex]) {
                 // Create a background fetch that doesn't wait for completion
                 fetch(`/process_image/${nextIndex}`)
                     .then(response => response.json())
@@ -215,14 +227,11 @@
             slideshowInterval = setInterval(() => {
                 if (isLoading) return;
                 
-                if (currentIndex < totalImages - 1) {
-                    loadAndShowImage(currentIndex + 1).then(() => {
-                        preloadNextImage();
-                    });
-                } else {
-                    // Stop at the end
-                    pauseSlideshow();
-                }
+                // Modified to loop back to the beginning rather than stopping
+                const nextIndex = (currentIndex + 1) % totalImages;
+                loadAndShowImage(nextIndex).then(() => {
+                    preloadNextImage();
+                });
             }, slideshowDelay);
         }
         
